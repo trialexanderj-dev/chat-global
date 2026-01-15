@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Chat Global Animado y Skins</title>
+<style>
+  /* --- RESET --- */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', Tahoma, sans-serif; background:#121212; color:#fff; display:flex; flex-direction:column; height:100vh; }
+
+  /* --- LOGIN --- */
+  #login { flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:10px; }
+  #username { padding:10px; border-radius:5px; border:none; width:250px; }
+  #colorPicker { width:50px; height:30px; border:none; cursor:pointer; }
+  #login button { padding:10px 20px; border:none; border-radius:5px; background:#0b93f6; color:#fff; cursor:pointer; font-weight:bold; }
+
+  /* --- CHAT --- */
+  #chatBox { display:none; flex-direction:column; height:100%; width:100%; }
+  #users { padding:10px; background:#1f1f1f; font-size:0.9em; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+  #chat { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px; background:#181818; }
+
+  /* --- MENSAJES --- */
+  .message { max-width:70%; padding:10px 15px; border-radius:15px; word-wrap:break-word; position:relative; opacity:0; transform:translateY(20px); animation:slideIn 0.3s forwards; }
+  .own { align-self:flex-end; border-bottom-right-radius:2px; }
+  .other { align-self:flex-start; border-bottom-left-radius:2px; }
+  .time { font-size:0.7em; opacity:0.7; position:absolute; bottom:3px; right:10px; }
+  
+  /* Animación de mensaje */
+  @keyframes slideIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+  /* --- INPUT --- */
+  #inputBox { display:flex; padding:10px; gap:5px; border-top:1px solid #333; background:#1f1f1f; }
+  #message { flex:1; padding:10px; border-radius:20px; border:none; outline:none; background:#2c2c2c; color:#fff; }
+  #send { padding:10px 15px; border:none; border-radius:20px; background:#0b93f6; color:#fff; cursor:pointer; font-weight:bold; }
+
+  /* --- BOTÓN BORRAR --- */
+  #clear { padding:5px 10px; border:none; border-radius:5px; background:#ff4b5c; color:#fff; cursor:pointer; font-weight:bold; }
+
+  /* --- AVATAR --- */
+  .avatar { width:25px; height:25px; border-radius:50%; display:inline-block; margin-right:5px; vertical-align:middle; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <input id="username" placeholder="Escribe tu nombre de usuario">
+  <label>Color de usuario: <input type="color" id="colorPicker" value="#0b93f6"></label>
+  <button onclick="login()">Entrar al chat</button>
+</div>
+
+<!-- CHAT -->
+<div id="chatBox">
+  <div id="users">
+    Usuarios conectados: <span id="userList">0</span>
+    <button id="clear" onclick="clearMessages()">Borrar chat</button>
+  </div>
+  <div id="chat"></div>
+  <div id="inputBox">
+    <input id="message" placeholder="Escribe un mensaje" onkeypress="enterPress(event)">
+    <button id="send" onclick="sendMessage()">Enviar</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, push, onChildAdded, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+// --- CONFIGURACIÓN FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyAXMMWNEtbqipdYFrQ6Lu5Kkf9XK2rD6qs",
+  authDomain: "global-chat-c1ecf.firebaseapp.com",
+  databaseURL: "https://global-chat-c1ecf-default-rtdb.firebaseio.com",
+  projectId: "global-chat-c1ecf",
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const messagesRef = ref(db, "messages");
+const usersRef = ref(db, "users");
+
+let user = "";
+let userColor = "#0b93f6";
+
+// --- LOGIN ---
+window.login = function() {
+  const input = document.getElementById("username");
+  if(input.value.trim()==="") return alert("Escribe un nombre");
+  user = input.value.trim();
+  userColor = document.getElementById("colorPicker").value;
+  document.getElementById("login").style.display="none";
+  document.getElementById("chatBox").style.display="flex";
+  push(usersRef, { name:user, color:userColor });
+}
+
+// --- ENVIAR MENSAJE ---
+window.sendMessage = function() {
+  const msg = document.getElementById("message").value.trim();
+  if(msg==="") return;
+  if(msg.length>500){ alert("Mensaje muy largo"); return; }
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+  push(messagesRef, { user, text: msg, time, color:userColor });
+  document.getElementById("message").value="";
+}
+
+// --- ENTER ---
+window.enterPress = function(e){ if(e.key==="Enter") sendMessage(); }
+
+// --- ESCUCHAR MENSAJES ---
+onChildAdded(messagesRef, (data)=>{
+  const { user: u, text, time, color } = data.val();
+  const chat = document.getElementById("chat");
+  const div = document.createElement("div");
+  div.className = "message " + (u===user?"own":"other");
+  div.style.backgroundColor = color || (u===user?"#0b93f6":"#2c2c2c");
+  div.innerHTML = `<span class="avatar" style="background-color:${color};"></span><b>${u}:</b> ${text} <span class="time">${time}</span>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+});
+
+// --- BORRAR MENSAJES ---
+window.clearMessages = function(){ if(confirm("¿Seguro que quieres borrar todo el chat?")) remove(messagesRef); }
+
+// --- LISTA DE USUARIOS ---
+onValue(usersRef, (snapshot)=>{
+  const users = snapshot.val();
+  const list = users ? Object.values(users).map(u=>`<span style="color:${u.color}">${u.name}</span>`) : [];
+  document.getElementById("userList").innerHTML = list.join(", ") || "0";
+});
+</script>
+
+</body>
+</html>
